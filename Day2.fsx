@@ -6,7 +6,7 @@ open System.IO
 Environment.CurrentDirectory <- __SOURCE_DIRECTORY__
 
 let data =
-    File.ReadAllText("./input/20.txt").Split(',')
+    File.ReadAllText("./input/2.txt").Split(',')
     |> Array.map int
     |> Array.mapi (fun i x -> (i,x))
     |> Map.ofArray
