@@ -15,7 +15,7 @@ let data = // Is child of
 
 let keys = data |> Map.toArray |> Array.map fst
 
-let rec score (v) =
+let rec score v =
     let parent = Map.tryFind v data
     match parent with
     | None -> 0
