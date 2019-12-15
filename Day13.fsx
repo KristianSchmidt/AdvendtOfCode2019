@@ -180,20 +180,26 @@ let play state =
                 //  |> int64
                 let vertical = Math.Sign(y1-y2)
                 match vertical with
-                | -1 -> // going down
+                | -1 ->
                     // try to project where it will be at 21
                     
                     let direction = Math.Sign(x2-x1) |> int64
                     let distFrom21 = 21L - y2
                     let projection = x2 + direction * distFrom21
-                    let choice = Math.Sign((fst state.PaddlePosition) - projection) |> int64
+                    let choice = Math.Sign(projection - (fst state.PaddlePosition)) |> int64
                     printfn "(%i,%i) -> (%i,%i)" x1 y1 x2 y2
                     printfn "Direction: %i. DistFrom21: %i" direction distFrom21
                     printfn "Paddle: (%i,%i). Projection: (%i,21)" (fst state.PaddlePosition) (snd state.PaddlePosition) projection
                     printfn "Choice: %i" choice
                     printfn ""
                     choice
-                | 0 | 1 -> 0L// stagnant
+                | 1 ->
+                    let choice = int64 (Math.Sign(x2 - fst state.PaddlePosition))
+                    printfn "(%i,%i), Paddle: (%i,%i)" x2 y2 (fst state.PaddlePosition) (snd state.PaddlePosition)
+                    printfn "Upwards choice: %i" choice
+                    printfn ""
+                    choice
+                | 0 -> 0L// stagnant
             | _ :: _ ->
                 0L
             | _ ->
@@ -313,12 +319,6 @@ let runUntilHalt program =
 
 /// Part 2
 
-let prependNewline (s : string) =
-    let sb = System.Text.StringBuilder()
-    sb.AppendLine() |> ignore
-    sb.Append(s) |> ignore
-    sb.ToString()
-
 let draw (arr : ((int64*int64)*Tile) array) =
     let drawRow a =
         snd a
@@ -363,27 +363,15 @@ drawi 15
 drawi 16
 drawi 17
 drawi 18
-
-
 drawi 19
+drawi 20
+drawi 21
+drawi 22
+drawi 23
+drawi 24
+drawi 25
+drawi 26
 
-
-
-
-freePlayProgram.Length
-
-Map.to freePlayProgram.[1]
-
-let img = 
-    freePlayProgram
-    |> Array.splitInto (freePlayProgram.Length/3)
-    |> Array.filter (fun [|x;_;_|] -> x <> -1L)
-    |> Array.map (fun [|x;y;z|] -> (x,y, Tile.ofInput z))
-
-
-draw img
-
-let xMin, xMax, yMin, yMax = (0L, 36L, 0L, 23L)
 
 
 let ans2 = data
