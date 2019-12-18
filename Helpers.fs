@@ -28,6 +28,11 @@ let prependNewline (s : string) =
     sb.Append(s) |> ignore
     sb.ToString()
 
+let inline toMap kvps =
+    kvps
+    |> Seq.map (|KeyValue|)
+    |> Map.ofSeq
+
 let r = new Random()
 /// Random function, inclusive of both bounds
 let random min max = r.Next(min, max+1)
@@ -49,6 +54,7 @@ module Dijkstra =
                        |> Array.collect (fun ((k1,k2),_) -> [|k1;k2|])
                        |> Array.distinct
                        |> Array.sort
+        
         let vMap = vertices |> Array.mapi (fun i e -> e,i) |> Map.ofArray
         let iMap = vertices |> Array.mapi (fun i e -> i,e) |> Map.ofArray
         let edgeFromIdx v = Map.find v iMap
@@ -57,6 +63,7 @@ module Dijkstra =
             let vE = edgeFromIdx v
             Map.tryFind (uE,vE) graph |> Option.defaultValue false
         let V = vertices.Length
+        printfn "V: %i" V
 
         // The output array. dist[i] 
         // will hold the shortest 
@@ -107,12 +114,17 @@ module BFS =
     let bfs (adj : (int*int) -> (int*int) array) start =
         let q = Queue<int*int>()
         q.Enqueue(start)
-        let discovered = HashSet<int*int>()
-        
+        let discovered = Dictionary<int*int,int>()
+        let dist pos = match discovered.TryGetValue(pos) with
+                       | (true,y) -> y
+                       | (false,_) -> 0
+
         while (q.Count > 0) do
             let v = q.Dequeue()
             adj v
-            |> Array.iter (fun w -> if (not <| discovered.Contains(w)) then discovered.Add(w) |> ignore; q.Enqueue(w))
+            |> Array.iter (fun w -> if (not <| discovered.ContainsKey(w)) then
+                                        discovered.Add(w,(dist v)+1) |> ignore
+                                        q.Enqueue(w))
 
-        discovered |> Seq.toArray
-    ()
+        toMap discovered
+    
