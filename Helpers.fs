@@ -4,6 +4,7 @@ module Helpers
 #nowarn "0025"
 
 open System
+open System.Collections.Generic
 
 let permutations list =
     let rec permutations' list taken = 
@@ -44,7 +45,7 @@ module Dijkstra =
     
     let dijkstra (graph : Map<(int*int)*(int*int),bool>) (src : int*int) = 
         let vertices = graph
-                       |> Map.toArray 
+                       |> Map.toArray
                        |> Array.collect (fun ((k1,k2),_) -> [|k1;k2|])
                        |> Array.distinct
                        |> Array.sort
@@ -101,3 +102,17 @@ module Dijkstra =
         [| 0 .. V-1 |]
         |> Array.map (fun i -> edgeFromIdx i, dist.[i])
         |> Map.ofArray
+
+module BFS =
+    let bfs (adj : (int*int) -> (int*int) array) start =
+        let q = Queue<int*int>()
+        q.Enqueue(start)
+        let discovered = HashSet<int*int>()
+        
+        while (q.Count > 0) do
+            let v = q.Dequeue()
+            adj v
+            |> Array.iter (fun w -> if (not <| discovered.Contains(w)) then discovered.Add(w) |> ignore; q.Enqueue(w))
+
+        discovered |> Seq.toArray
+    ()
