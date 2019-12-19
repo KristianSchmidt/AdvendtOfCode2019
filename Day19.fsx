@@ -148,7 +148,7 @@ let play2 state =
         
         let (input::inputsLeft) = state.Inputs
             
-        printfn "Input: %i" input
+        //printfn "Input: %i" input
 
         let newState =
             state
@@ -231,6 +231,100 @@ let ans1 =
 ans1
 
 /// Part 2
+
+let isTractorBeam (x,y) =
+    runUntilHalt2 data [x;y]
+    |> Array.head
+
+let drawTile = function | 0L -> "." | 1L -> "#"
+
+let draw xLimit yLimit =
+    seq {
+        for y in 0L .. yLimit do
+            yield
+                seq {
+                    for x in 0L .. xLimit do
+                        yield isTractorBeam (x,y) |> drawTile
+                } |> Array.ofSeq |> String.concat "" 
+    }
+    |> Array.ofSeq
+    |> String.concat "\n"
+    |> prependNewline
+
+draw 490L 490L
+
+let solve pos =
+    let rec f (x,y) =
+        let beamCount =
+            [| 0L .. 99L |]
+            |> Seq.takeWhile (fun i -> isTractorBeam (x+i,y) = 1L)
+            |> Seq.length
+        if (beamCount = 100) then
+            x,y
+        else
+            //printfn "(%i,%i): %i" x y beamCount
+            if (isTractorBeam (x,y+1L) = 1L) then
+                f (x,y+1L)
+            else
+                f (x+1L,y+1L)
+    f pos
+
+solve (450L,634L)
+
+let isStartingPoint (x,y) =
+    let xAxis = [| 0L .. 99L |]
+                |> Seq.takeWhile (fun i -> isTractorBeam (x+i,y) = 1L)
+                |> Seq.length
+    let yAxis = [| 0L .. 99L |]
+                |> Seq.takeWhile (fun i -> isTractorBeam (x,y+i) = 1L)
+                |> Seq.length
+    xAxis = 100 && yAxis = 100, xAxis, yAxis
+
+let findStartingXNaive y =
+    [| 0L .. 10_000L |]
+    |> Seq.find (fun x -> isTractorBeam (x,y) = 1L)
+
+let findStartingX y xStarts =
+    //printfn "Trying to find %i" (y-1L)
+    let firstX = Map.find (y-1L) xStarts
+    [| 0L .. 99L |]
+    |> Seq.find (fun i -> isTractorBeam (firstX + i,y) = 1L)
+    |> (fun i -> i + firstX)
+
+let solveX pos =
+    let (x',y') = pos
+    let xs = Map.ofList [ y',x' ]
+    printfn "%A" xs
+    let rec f xStarts (x,y) maxX =
+        let (isWinner, xCount, yCount) = isStartingPoint (x,y)
+        let newMaxX =
+            if (yCount > maxX) then
+                printfn "New max x: %i at (%i,%i)" maxX x y
+                yCount
+            else
+                maxX
+        if (isWinner) then
+            x*10_000L+y
+        else
+            if (xCount < 100) then
+                let newY = y+1L
+                let firstXnewRow = findStartingX newY xStarts
+                let newXstarts = Map.add newY firstXnewRow xStarts
+                //printfn "New row %i starts at %i" newY firstXnewRow
+                f newXstarts (firstXnewRow, newY) newMaxX
+            else
+                f xStarts (x+1L,y) newMaxX
+
+    f xs pos 0
+
+let startAt y =
+    let x = findStartingXNaive y
+    solveX (x,y)
+
+startAt 1060L
+
+// ans = 8381082L = (838,1082)
+
 
 let ans2 = data
 
