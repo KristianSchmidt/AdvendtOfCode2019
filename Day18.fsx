@@ -116,6 +116,7 @@ let removeKeyAndDoor t m =
 
 type PartialSol = { KeysLeft : Map<Pos,Tile>
                     DistanceTraveled : int
+                    EstimateRest : int
                     CurrTiles : Map<Pos,Tile>
                     CurrPos : Pos
                       }
@@ -123,6 +124,14 @@ type PartialSol = { KeysLeft : Map<Pos,Tile>
 let randomize xs = xs |> List.map (fun x -> random 0 100,x) |> List.sortBy fst |> List.map snd
 
 let takeMax n xs = List.take (min n (List.length xs)) xs
+
+let manhattan ((p1x,p1y) : Pos) ((p2x,p2y) : Pos) =
+    abs (p1x - p2x) + abs (p1y - p2y)
+
+let distanceToKeys (keys : Map<Pos,Tile>) pos =
+    keys
+    |> Map.toSeq
+    |> Seq.sumBy (fst >> (manhattan pos))
 
 let solve tiles =
     let origin = tiles |> Map.findKey (fun k v -> v = Origin)
@@ -156,12 +165,13 @@ let solve tiles =
                 let newTiles = removeKeyAndDoor chosenKey psol.CurrTiles
                 let newKeysLeft = psol.KeysLeft |> Map.remove pos
                 let newDistance = psol.DistanceTraveled + d
-                { KeysLeft = newKeysLeft; DistanceTraveled = newDistance; CurrTiles = newTiles; CurrPos = pos }
+                let estimate = distanceToKeys newKeysLeft pos
+                { KeysLeft = newKeysLeft; DistanceTraveled = newDistance; EstimateRest = estimate; CurrTiles = newTiles; CurrPos = pos }
             
             let newPsols =
                 List.map constructPsol (Map.toList availKeys)
-                |> List.filter (fun psol' -> psol'.DistanceTraveled < bestVal) // Needs to be lower than bestVal in order to even have a chance
-                |> randomize
+                |> List.filter (fun psol' -> psol'.DistanceTraveled + psol'.EstimateRest < bestVal) // Needs to be lower than bestVal in order to even have a chance
+                |> List.sortBy (fun psol' -> psol'.DistanceTraveled + psol'.EstimateRest)
 
             let newQueue = List.concat [newPsols; xs]// |> randomize
                            
@@ -170,23 +180,49 @@ let solve tiles =
             
             f newQueue bestVal
     
-    let init = { KeysLeft = keyMap; DistanceTraveled = 0; CurrTiles = tiles; CurrPos = origin }
+    let estimate = distanceToKeys keyMap origin
+    let init = { KeysLeft = keyMap; DistanceTraveled = 0; EstimateRest = estimate; CurrTiles = tiles; CurrPos = origin }
     f [ init ] Int32.MaxValue
 
 
-let keys = data |> Map.toArray |> Array.filter (snd >> Tile.isKey) |> Array.map fst
+let nonWallNeighbors p data =
+    let n = getAllNeighbors p
+    let nTiles = n |> Array.map (fun k -> (Map.tryFind k data |> Option.defaultValue Wall))
+    //printfn "n: %A" n
+    //printfn "nTiles: %A" nTiles
+    nTiles |> Array.filter ((<>)Wall) |> Array.length
 
-keys |> Array.map (BFS.bfs (generateEdges data))
+let rmDeadEnd (init : Map<Pos,Tile>) =
+    let rec loop (m : Map<Pos,Tile>) =
+        let candidates =
+            m
+            |> Seq.filter (fun kv -> kv.Value = Empty && nonWallNeighbors kv.Key m = 1)
+            |> Seq.map (fun kv -> kv.Key)
+            |> Array.ofSeq
 
-// (data |> Map.findKey (fun k v -> v = Origin))
+        if (candidates.Length > 0) then
+            printfn "Removing %i tiles." candidates.Length
+            let newMap = candidates |> Array.fold (fun m' p -> Map.add p Empty m') m
+            loop newMap
+        else
+            m
 
-let ans1 = solve data
+    loop init
+    
 
-data |> Map.toArray |> Array.filter (snd >> Tile.isKey) |> Array.length
+rmDeadEnd data
 
-data |> Map.toArray |> Array.filter (snd >> (function | Door _ -> true | _ -> false)) |> Array.length
 
-ans1
+
+
+
+
+|> Array.ofSeq
+|> Array.map (fun kv -> kv.Key)
+|> Array.sort
+
+nonWallNeighbors (5,1)
+
 
 /// Part 2
 
