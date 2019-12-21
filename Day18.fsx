@@ -14,13 +14,21 @@ type Tile =
     | Door of string
 
 module Tile =
-    let isNotDoorOrWall =
-        function
-        | Wall | Door _ -> false
-        | _ -> true
-
     let isKey = function | Key _ -> true | _ -> false
+    let isKeyOrOrigin = function | Key _ | Origin -> true | _ -> false
     let getKey = function | Key k -> Some k | _ -> None
+
+    let isKeyOrDoor = function | Key _ | Door _ -> true | _ -> false
+
+    let isEmptyOrDoor = function | Empty | Door _ -> true | _ -> false
+
+    let draw =
+        function
+        | Empty -> "."
+        | Wall -> "#"
+        | Origin -> "@"
+        | Key k -> k
+        | Door d -> d
 
 let parseTile c =
     match c with
@@ -77,155 +85,358 @@ let data81 =
 
 type Pos = int*int
 
+let draw (m : Map<Pos,Tile>) =
+    let drawRow (_,arr) =
+        arr
+        |> Seq.sortBy fst
+        |> Seq.map snd
+        |> String.concat ""
+    
+    m
+    |> Map.map (fun k v -> Tile.draw v)
+    |> Map.toSeq
+    |> Seq.groupBy (fst >> snd)
+    |> Seq.sortBy fst
+    |> Seq.map drawRow
+    |> String.concat "\n"
+    |> prependNewline
+
+let getPosOf (t : Tile) (m : Map<Pos,Tile>) =
+    Map.findKey (fun k v -> v = t) m
+
 let getAllNeighbors (x,y) =
     [| (x,y+1)
        (x,y-1)
        (x-1,y)
        (x+1,y) |]
 
-let generateEdges graph (pos : Pos) =
-    getAllNeighbors pos
-    |> Array.filter (fun pos' -> Map.tryFind pos' graph
-                                 |> Option.defaultValue Wall
-                                 |> Tile.isNotDoorOrWall)
-
-let removeKeyAndDoor t m =
-    let k = 
-        match t with
-        | Key key -> key
-        | _ -> failwithf "Not passed a key"
-
-    m
-    |> Map.map (fun _ v -> match v with
-                           | Key k' when k' = k ->
-                                //printfn "Removing %A" v
-                                Empty
-                           | Door d when d = k.ToUpper() ->
-                                //printfn "Removing %A" v
-                                Empty
-                           | _ -> v)
-
-(*
-    Repeat: Until all keys are gone
-    Do BFS to find out what can be searched
-    Find areas with keys
-    Do dijkstra to get all distances for the keys
-    Heuristic: Choose the one closest
-    Remove the key and door
-*)
-
-type PartialSol = { KeysLeft : Map<Pos,Tile>
-                    DistanceTraveled : int
-                    EstimateRest : int
-                    CurrTiles : Map<Pos,Tile>
-                    CurrPos : Pos
-                      }
-
-let randomize xs = xs |> List.map (fun x -> random 0 100,x) |> List.sortBy fst |> List.map snd
-
-let takeMax n xs = List.take (min n (List.length xs)) xs
-
-let manhattan ((p1x,p1y) : Pos) ((p2x,p2y) : Pos) =
-    abs (p1x - p2x) + abs (p1y - p2y)
-
-let distanceToKeys (keys : Map<Pos,Tile>) pos =
-    keys
-    |> Map.toSeq
-    |> Seq.sumBy (fst >> (manhattan pos))
-
-let solve tiles =
-    let origin = tiles |> Map.findKey (fun k v -> v = Origin)
-    
-    let keyMap = tiles |> Map.filter (fun p t -> Tile.isKey t)
-    
-    let mutable iter = 0L
-
-    let rec f (queue : PartialSol list) bestVal =
-        iter <- iter + 1L
-        if (iter % 1000L = 0L) then printfn "Iter: %i. Queue size: %i" iter queue.Length
-        match queue with
-        | [] -> printfn "Exhaused queue. %i" bestVal
-        | psol :: xs ->
-        if (Map.isEmpty psol.KeysLeft) then // Is a final solution
-            if (psol.DistanceTraveled < bestVal) then
-                printfn "New best: %i < %i" psol.DistanceTraveled bestVal
-                f xs psol.DistanceTraveled
-            else
-                f xs bestVal
-        else
-
-            let edges = generateEdges psol.CurrTiles
-            let availVertices = Helpers.BFS.bfs edges psol.CurrPos
-            // The keys we can see now are the choices we have
-            let availKeys = availVertices
-                            |> Map.filter (fun p v -> Map.find p psol.CurrTiles |> Tile.isKey)
-
-            let constructPsol ((pos,d) : Pos*int) =
-                let chosenKey = Map.find pos psol.CurrTiles
-                let newTiles = removeKeyAndDoor chosenKey psol.CurrTiles
-                let newKeysLeft = psol.KeysLeft |> Map.remove pos
-                let newDistance = psol.DistanceTraveled + d
-                let estimate = distanceToKeys newKeysLeft pos
-                { KeysLeft = newKeysLeft; DistanceTraveled = newDistance; EstimateRest = estimate; CurrTiles = newTiles; CurrPos = pos }
-            
-            let newPsols =
-                List.map constructPsol (Map.toList availKeys)
-                |> List.filter (fun psol' -> psol'.DistanceTraveled + psol'.EstimateRest < bestVal) // Needs to be lower than bestVal in order to even have a chance
-                |> List.sortBy (fun psol' -> psol'.DistanceTraveled + psol'.EstimateRest)
-
-            let newQueue = List.concat [newPsols; xs]// |> randomize
-                           
-            //let distance = Map.find chosenPos availVertices
-            //printfn "Chose to remove %A. %A -> %A costs %i" chosenKey currPos chosenPos distance
-            
-            f newQueue bestVal
-    
-    let estimate = distanceToKeys keyMap origin
-    let init = { KeysLeft = keyMap; DistanceTraveled = 0; EstimateRest = estimate; CurrTiles = tiles; CurrPos = origin }
-    f [ init ] Int32.MaxValue
-
-
 let nonWallNeighbors p data =
-    let n = getAllNeighbors p
-    let nTiles = n |> Array.map (fun k -> (Map.tryFind k data |> Option.defaultValue Wall))
-    //printfn "n: %A" n
-    //printfn "nTiles: %A" nTiles
-    nTiles |> Array.filter ((<>)Wall) |> Array.length
+    getAllNeighbors p
+    |> Array.map (fun k -> (Map.tryFind k data |> Option.defaultValue Wall))
+    |> Array.filter ((<>)Wall)
+    |> Array.length
 
 let rmDeadEnd (init : Map<Pos,Tile>) =
     let rec loop (m : Map<Pos,Tile>) =
         let candidates =
             m
-            |> Seq.filter (fun kv -> kv.Value = Empty && nonWallNeighbors kv.Key m = 1)
+            |> Seq.filter (fun kv -> Tile.isEmptyOrDoor kv.Value && nonWallNeighbors kv.Key m = 1)
             |> Seq.map (fun kv -> kv.Key)
             |> Array.ofSeq
 
         if (candidates.Length > 0) then
-            printfn "Removing %i tiles." candidates.Length
-            let newMap = candidates |> Array.fold (fun m' p -> Map.add p Empty m') m
+            //printfn "Removing %i tiles." candidates.Length
+            let newMap = candidates |> Array.fold (fun m' p -> Map.add p Wall m') m
             loop newMap
         else
             m
 
     loop init
+
+let adjf m pos =
+    getAllNeighbors pos
+    |> Array.filter (fun p -> Wall <> (Map.tryFind p m |> Option.defaultValue Wall))
+
+let constructPath (p : Map<Pos,Pos>) dest =
+    let rec loop xs d =
+        match Map.tryFind d p with
+        | Some parent ->
+            //printfn "Next up %A" parent
+            loop (parent :: xs) parent
+        | None -> xs
+    loop [dest] dest
+
+let getPath m parents pos =
+    constructPath parents pos
+    |> List.map (fun k -> Map.find k m)
+    |> List.filter (Tile.isKeyOrDoor)
+
+let availableKeys (arr : Tile list array) =
+    let findKey (xs : Tile list) =
+        match List.tryHead xs with
+        | Some (Door _) -> None
+        | Some (Key k) -> Some k
+        | Some _ -> failwithf "."
+        | None -> None
+
+    arr
+    |> Array.choose findKey
+    |> Array.distinct
+
+let removeTile t (arr : Tile list array) =
+    arr
+    |> Array.map (List.filter ((<>)t))
+
+type PartialSol = { Paths : Tile list array
+                    DistanceTraveled : int
+                    CurrentKey : string option
+                    Visited : string list
+                   }
+
+let allKeysDistances (m : Map<Pos,Tile>) =
+    let keyPos =
+        m
+        |> Map.filter (fun k v -> Tile.isKeyOrOrigin v)
+
+    let filterToKeys o (m : Map<Pos,int>) =
+        m
+        |> Map.filter (fun k v -> Map.containsKey k keyPos)
+        |> Map.toSeq
+        |> Seq.map (fun (k,v) -> (o,Map.find k keyPos), v)
+        |> Map.ofSeq
     
+    let allKeys =
+        m
+        |> Map.filter (fun k v -> Tile.isKeyOrOrigin v)
+        |> Map.toArray
+        |> Array.map (fun (p,t) -> Helpers.BFS.bfs (adjf m) p
+                                   |> filterToKeys t)
+    
+    allKeys
+    |> Array.fold Map.merge Map.empty
+    
+let makePaths m =
+    let (_, parents) =
+        Helpers.BFS.bfsWithPath (adjf m) (getPosOf Origin m)
+    
+    m
+    |> Map.filter (fun k v -> v <> Wall && nonWallNeighbors k m = 1)
+    |> Map.toArray
+    |> Array.map (fst >> (getPath m parents))
+    |> Array.filter (List.isEmpty >> not)
 
-rmDeadEnd data
+let solve (m : Map<Pos,Tile>) =
+    let distances = allKeysDistances m
 
+    let paths = makePaths m
+    
+    let mutable iter = 0L
+    let rec loop (queue : PartialSol list) bestSol =
+        match queue with
+        | [] -> bestSol
+        | psol :: xs ->
+            let keys = availableKeys psol.Paths
+            let currKey =
+                psol.CurrentKey
+                |> Option.map (fun k -> Key k)
+                |> Option.defaultValue Origin
+            
+            match keys with
+            | [||] -> // It's a final solution
+                iter <- iter + 1L
+                if (iter % 1000000L = 0L) then printfn "Iter: %i" iter
+                if (psol.DistanceTraveled < bestSol) then
+                    printfn "New best: %A" psol
+                    loop xs psol.DistanceTraveled
+                else
+                    loop xs bestSol
+            | _ ->
+                let makeChildSol k =
+                    let distToChild = Map.find (currKey, Key k) distances
+                    { psol with
+                        Paths = psol.Paths
+                                |> removeTile (Door (k.ToUpper()))
+                                |> removeTile (Key k)
+                        DistanceTraveled = psol.DistanceTraveled + distToChild 
+                        CurrentKey = Some k
+                        Visited = k :: psol.Visited
+                    }
+                let nextSols =
+                    keys
+                    |> Array.map makeChildSol
+                    |> List.ofArray
+                    |> List.sortBy (fun psol -> psol.DistanceTraveled)
 
+                loop (List.concat [nextSols; xs]) bestSol
+    
+    loop [{ Paths = paths
+            DistanceTraveled = 0
+            CurrentKey = None
+            Visited = List.empty }] Int32.MaxValue
 
-
-
-
-|> Array.ofSeq
-|> Array.map (fun kv -> kv.Key)
-|> Array.sort
-
-nonWallNeighbors (5,1)
-
+solve (rmDeadEnd data)
 
 /// Part 2
 
-let ans2 = data
+let data2 =
+    let (x,y) = getPosOf Origin data
+    data
+    |> Map.add (x-1,y-1) Origin |> Map.add (x,y-1) Wall |> Map.add (x+1,y-1) Origin
+    |> Map.add (x-1,y) Wall |> Map.add (x,y) Wall |> Map.add (x+1,y) Wall
+    |> Map.add (x-1,y+1) Origin |> Map.add (x,y+1) Wall |> Map.add (x+1,y+1) Origin
+    //|> Map.map (fun k v -> match v with | Door _ -> Empty | _ -> v)
+
+let (xO,yO) = getPosOf Origin data
+let ulMap = data2 |> Map.filter (fun (x,y) _ -> x <= xO && y <= yO) |> rmDeadEnd
+let urMap = data2 |> Map.filter (fun (x,y) _ -> x >= xO && y <= yO) |> rmDeadEnd
+let llMap = data2 |> Map.filter (fun (x,y) _ -> x <= xO && y >= yO) |> rmDeadEnd
+let lrMap = data2 |> Map.filter (fun (x,y) _ -> x >= xO && y >= yO) |> rmDeadEnd
+
+let extractCommon (paths : Tile list array) =
+    let allHeadsEqual paths =
+        let distinctHeads = paths |> Array.map List.tryHead |> Array.distinct
+        if (distinctHeads.Length = 1 &&
+            distinctHeads.[0].IsSome &&
+            Tile.isKey distinctHeads.[0].Value) then
+            distinctHeads.[0]
+        else
+            None
+
+    let rec loop xs res =
+        match allHeadsEqual xs with
+        | Some k -> loop (xs |> Array.map List.tail) (k :: res)
+        | None -> List.rev res
+
+    loop paths List.empty
+
+type PartialSol2 =
+    { Paths : Tile list array array
+      DistancesTraveled : int array
+      CurrentKeys : string option array
+    }
+
+// Removes the common prefix from some paths
+let transformPaths (paths : Tile list array) =
+    let common = extractCommon paths
+    let commonLength = common.Length
+    paths |> Array.map (List.skip commonLength), common
+
+(*
+1. Start with some partial solution
+2. Check each quardrant for any freebie paths
+3. If there are paths, calculate extra distance taken and remove freebies from paths
+4. For the paths with freebies removed, check available keys
+5. For each of the avail keys, create a child partial solution
+6. Queue up new solutions
+*)
+
+let calcExtraDistance (distances : Map<Tile*Tile,int>) (key,tiles) =
+    let getDistance [x1;x2] = Map.find (x1,x2) distances
+    let keyTile = match key with | None -> Origin | Some k -> Key k
+    (keyTile :: tiles)
+    |> List.windowed 2
+    |> List.sumBy getDistance
+
+let pathContainsKey k (paths : Tile list array) =
+    paths
+    |> Array.exists (List.exists ((=)(Key k)))
+
+let removeKeyAndDoor (k : string) (paths : Tile list array array) =
+    paths
+    |> Array.map (Array.map (List.filter (fun t -> t <> (Door (k.ToUpper())) && t <> (Key k))))
+    |> Array.map (Array.filter ((<>)List.empty))
+
+let mapAtIdx idx f arr =
+    arr
+    |> Array.mapi (fun i x -> if (i = idx) then f x else x)
+
+let rec solver2Loop distances (queue : PartialSol2 list) (bestSol : PartialSol2) =
+    match queue with
+    | [] -> bestSol
+    | psol :: xs ->
+        let (newPaths, commons) = 
+            psol.Paths
+            |> Array.map transformPaths
+            |> Array.unzip
+
+        let keysFoundFreebie =
+            commons
+            |> Array.collect (List.choose Tile.getKey >> Array.ofList)
+        //printfn "Keys found: %A" keysFoundFreebie
+
+        let newPaths =
+            keysFoundFreebie
+            |> Array.fold (fun arr k -> removeKeyAndDoor k arr) newPaths
+
+        let freebieDistances = Array.zip psol.CurrentKeys commons
+                               |> Array.map (calcExtraDistance distances)
+                
+        let distancesAfterFreebies =
+            Array.zip freebieDistances psol.DistancesTraveled
+            |> Array.map (fun (x1,x2) -> x1 + x2)
+
+        let newKeys =
+            let freebieKeys =
+                commons
+                |> Array.map List.tryLast
+                |> Array.map (Option.bind Tile.getKey)
+            Array.zip freebieKeys psol.CurrentKeys
+            |> Array.map
+                (fun (freebie,curr) -> 
+                    match freebie with
+                    | Some k -> Some k
+                    | None -> curr
+                )
+
+        let psolAfterFreebies =
+            { Paths = newPaths; DistancesTraveled = distancesAfterFreebies;
+              CurrentKeys = newKeys }
+
+        let choices = newPaths |> Array.collect availableKeys
+
+        let makePsol k =
+            let idxOfKey = newPaths |> Array.findIndex (pathContainsKey k)
+            let newPaths = removeKeyAndDoor k newPaths
+            let keyAtChoice =
+                match newKeys.[idxOfKey] with
+                | None -> Origin
+                | Some curr -> Key curr
+
+            // update distance
+            let newDistances =
+                distancesAfterFreebies
+                |> mapAtIdx idxOfKey ((+) (Map.find (keyAtChoice, Key k) distances))
+            // update key
+            let newKeys = mapAtIdx idxOfKey (fun _ -> Some k) newKeys
+            
+            { Paths = newPaths
+              DistancesTraveled = newDistances
+              CurrentKeys = newKeys
+            }
+            
+        let nextSols =
+            choices
+            |> Array.map makePsol
+            |> List.ofArray
+            |> List.sortBy (fun psol -> Array.sum psol.DistancesTraveled)
+
+        match nextSols with
+        | [] -> // It's a final solution
+            
+            let dist = Array.sum psolAfterFreebies.DistancesTraveled
+            if (dist < (Array.sum bestSol.DistancesTraveled)) then
+                printfn "New best: %i" dist
+                //printfn "Choices: %A" choices
+                //printfn "New paths: %A" psolAfterFreebies.Paths
+                //printfn "%A" psolAfterFreebies
+                solver2Loop distances xs psolAfterFreebies
+            else
+                solver2Loop distances xs bestSol
+        | _ ->
+            let nextQueue = List.concat [nextSols; xs]
+            solver2Loop distances nextQueue bestSol
+            //solver2Loop distances xs bestSol
+
+let solve2 (maps : Map<Pos,Tile> array) =
+    let distances =
+        maps
+        |> Array.map allKeysDistances
+        |> Array.fold Map.merge Map.empty // Fold into a single map
+    
+    let startingPaths = Array.map makePaths maps
+    let startingDistances = Array.replicate maps.Length 0
+    let startingKeys = Array.replicate maps.Length None // None = Origin
+
+    let init =
+        { Paths = startingPaths
+          DistancesTraveled = startingDistances
+          CurrentKeys = startingKeys
+        }
+        
+    solver2Loop distances [init] { init with DistancesTraveled = Array.replicate maps.Length 100_000 }
+
+let sol = solve2 [| urMap; ulMap; lrMap; llMap |]
+
+let ans2 = Array.sum sol.DistancesTraveled
 
 ans2

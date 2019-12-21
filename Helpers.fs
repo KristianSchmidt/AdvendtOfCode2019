@@ -42,6 +42,10 @@ let getMinMax arr =
     let ys = arr |> Array.map (fst >> snd)
     Array.min xs, Array.max xs, Array.min ys, Array.max ys
 
+module Map =
+    let merge map1 map2 =
+        Map.fold (fun acc key value -> Map.add key value acc) map1 map2
+
 module Dijkstra =
     let private minDistance (dist : int array) (sptSet : bool array) =
         [| 0 .. (dist.Length - 1) |]
@@ -115,6 +119,7 @@ module BFS =
         let q = Queue<int*int>()
         q.Enqueue(start)
         let discovered = Dictionary<int*int,int>()
+        discovered.Add(start, 0)
         let dist pos = match discovered.TryGetValue(pos) with
                        | (true,y) -> y
                        | (false,_) -> 0
@@ -127,4 +132,24 @@ module BFS =
                                         q.Enqueue(w))
 
         toMap discovered
+
+    let bfsWithPath (adj : (int*int) -> (int*int) array) start =
+        let q = Queue<int*int>()
+        q.Enqueue(start)
+        let discovered = Dictionary<int*int,int>()
+        discovered.Add(start, 0)
+        let parent = Dictionary<int*int,int*int>()
+        let dist pos = match discovered.TryGetValue(pos) with
+                       | (true,y) -> y
+                       | (false,_) -> 0
+
+        while (q.Count > 0) do
+            let v = q.Dequeue()
+            adj v
+            |> Array.iter (fun w -> if (not <| discovered.ContainsKey(w)) then
+                                        discovered.Add(w,(dist v)+1) |> ignore
+                                        parent.Add(w,v)
+                                        q.Enqueue(w))
+
+        toMap discovered, toMap parent
     
