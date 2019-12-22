@@ -98,7 +98,7 @@ let adjf graph pos =
         | None -> stdNeighbors
     | _ -> stdNeighbors
 
-let aa = Map.findKey (fun k v -> v = OuterPortal "ZZ") graph
+let aa = Map.findKey (fun k v -> v = OuterPortal "AA") graph
 let zz = Map.findKey (fun k v -> v = OuterPortal "ZZ") graph
 
 let ans1 =
@@ -116,29 +116,21 @@ let adjf2 (graph : Map<int*int,Tile>) ((pos,level) : (int*int)*int) =
         |> Array.map (fun n -> n,Map.tryFind n graph |> Option.defaultValue Wall)
         |> Array.filter (snd >> Tile.isNotWallOrSpace)
         |> Array.map (fst >> (fun n -> n,level))
-    match level with
-    | 0 ->
-        match t with
-        | OuterPortal _ -> stdNeighbors
-        | InnerPortal p ->
-            match Map.tryFindKey (fun k v -> v = OuterPortal p) graph with
-            | Some portalPos -> Array.append [| (portalPos, 1) |] stdNeighbors
-            | None -> stdNeighbors
-        | _ -> stdNeighbors
-    | l ->
-        match t with
-        | OuterPortal "AA"
-        | OuterPortal "ZZ" -> stdNeighbors
-        | OuterPortal p ->
-            match Map.tryFindKey (fun k v -> v = InnerPortal p) graph with
-            | Some portalPos -> Array.append [| (portalPos, l-1) |] stdNeighbors
-            | None -> stdNeighbors
-        | InnerPortal p ->
-            match Map.tryFindKey (fun k v -> v = OuterPortal p) graph with
-            | Some portalPos -> Array.append [| (portalPos, l+1) |] stdNeighbors
-            | None -> stdNeighbors
-        | _ -> stdNeighbors
-
+    
+    match level, t with
+    | _, OuterPortal "AA"
+    | _, OuterPortal "ZZ"
+    | 0, OuterPortal _ -> stdNeighbors
+    | l, OuterPortal p ->
+        match Map.tryFindKey (fun k v -> v = InnerPortal p) graph with
+        | Some portalPos -> Array.append [| (portalPos, l-1) |] stdNeighbors
+        | None -> stdNeighbors
+    | l, InnerPortal p ->
+        match Map.tryFindKey (fun k v -> v = OuterPortal p) graph with
+        | Some portalPos -> Array.append [| (portalPos, l+1) |] stdNeighbors
+        | None -> stdNeighbors
+    | _ -> stdNeighbors
+        
 let ans2 =
     BFS.bfsWithStop (adjf2 graph) (aa,0) (zz,0)
     |> Map.find (zz,0)
