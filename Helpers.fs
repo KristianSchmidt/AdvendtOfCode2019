@@ -115,10 +115,10 @@ module Dijkstra =
         |> Map.ofArray
 
 module BFS =
-    let bfs (adj : (int*int) -> (int*int) array) start =
-        let q = Queue<int*int>()
+    let bfs (adj : ('a) -> ('a) array) start =
+        let q = Queue<'a>()
         q.Enqueue(start)
-        let discovered = Dictionary<int*int,int>()
+        let discovered = Dictionary<'a,int>()
         discovered.Add(start, 0)
         let dist pos = match discovered.TryGetValue(pos) with
                        | (true,y) -> y
@@ -130,6 +130,26 @@ module BFS =
             |> Array.iter (fun w -> if (not <| discovered.ContainsKey(w)) then
                                         discovered.Add(w,(dist v)+1) |> ignore
                                         q.Enqueue(w))
+
+        toMap discovered
+
+    let bfsWithStop (adj : ('a) -> ('a) array) start stop =
+        let q = Queue<'a>()
+        q.Enqueue(start)
+        let discovered = Dictionary<'a,int>()
+        discovered.Add(start, 0)
+        let dist pos = match discovered.TryGetValue(pos) with
+                       | (true,y) -> y
+                       | (false,_) -> 0
+
+        while (q.Count > 0) do
+            let v = q.Dequeue()
+            let adjs = adj v
+            adjs
+            |> Array.iter (fun w -> if (not <| discovered.ContainsKey(w)) then
+                                        discovered.Add(w,(dist v)+1) |> ignore
+                                        q.Enqueue(w))
+            if (Array.contains stop adjs) then q.Clear()
 
         toMap discovered
 
