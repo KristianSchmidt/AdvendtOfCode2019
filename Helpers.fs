@@ -20,6 +20,32 @@ let rec gcd x y = if y = 0L then abs x else gcd y (x % y)
 
 let lcm x y = x * y / (gcd x y)
 
+let extGCD (a : bigint) (b : bigint) =
+   let rec inner (r'', s'', t'') (r', s', t') = 
+       let step () = 
+           let q = r'' / r'
+           let r = r'' - q*r'
+           let s = s'' - q*s'
+           let t = t'' - q*t'
+           (r, s, t)
+       if r' = 0I then (r'', s'', t'')
+       else inner (r', s', t') (step())
+
+   inner (a, 1I, 0I) (b, 0I, 1I)
+
+let inverseMod a n =
+    let (gcd,x,_) = extGCD a n
+    (x % n + n) % n
+
+let memoize fn =
+  let cache = new System.Collections.Generic.Dictionary<_,_>()
+  (fun x ->
+    match cache.TryGetValue x with
+    | true, v -> v
+    | false, _ -> let v = fn (x)
+                  cache.Add(x,v)
+                  v)
+
 let split (splitOn : string) (s : string) = s.Split([|splitOn|], StringSplitOptions.None)
 
 let prependNewline (s : string) =
