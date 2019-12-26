@@ -119,7 +119,7 @@ let play state =
     let nextInstr = Map.find state.Pos currentProgram
                     |> parseInstr
     let pos = state.Pos
-    let state = state |> setReceivingFalse
+    let state = state
 
     let findReadIdx pos paramMode =
         let opIdx = Map.find pos currentProgram
@@ -171,6 +171,7 @@ let play state =
             state
             |> adjustRelativeBase op1
             |> increasePosBy 2L
+            |> setReceivingFalse
 
         newState
     | EqLessThan ((fstMode, sndMode, outMode), operation) ->
@@ -253,14 +254,11 @@ ans1
 
 /// Part 2
 
-let haveSameY newNat nat =
-    match newNat, nat with
-    | Some newXY, Some xy when newXY.Y = xy.Y ->
-        Some newXY.Y
-    | _ -> None
-
 let solve2 (machines : AmpState array) =
-    let rec loop ms nat idle =
+    let mutable iter = 0L
+    let rec loop ms nat lastYsent =
+        iter <- iter + 1L
+        if (iter % 10000L = 0L) then printfn "Iter: %i" iter
         let (outputOpts, newMs) =
             Array.map (play >> collectOutput) ms
             |> Array.unzip
@@ -270,32 +268,29 @@ let solve2 (machines : AmpState array) =
         let newNat =
             match outputs |> Array.tryFind (fun (i,_) -> i = 255L) with
             | Some (_,xy) ->
-                
+                //printfn "Received to NAT: %A" xy
                 xy
             | None -> nat
         
         let isIdle = newMs' |> Array.forall (fun m -> m.IsReceivingEmptyQueue)
-        let idleIters = if (isIdle) then printfn "Idle: %i" idle; idle + 1 else idle
-        let newMs'',newIdle =
-            if (idleIters > 10) then
-                printfn "Everyone's waiting. Sending (%i,%i) to 0" newNat.X newNat.Y
-                newMs' |> mapAtIdx 0 (addInput newNat), 0
+        let newMs'', newYsent =
+            if (isIdle && newNat.X <> -1L) then
+                //printfn "%i: Everyone's waiting. Sending (%i,%i) to 0" iter newNat.X newNat.Y
+                let newStates = 
+                    newMs'
+                    |> mapAtIdx 0 (addInput newNat)
+                    |> Array.map setReceivingFalse
+                newStates, Some newNat.Y
             else
-                newMs', idleIters
+                newMs', None
 
-        if (false) then 0 else
-            loop newMs'' newNat newIdle
+        match lastYsent, newYsent with
+        | Some lastY, Some newY when lastY = newY -> lastY
+        | _, Some _ -> loop newMs'' newNat newYsent
+        | _ -> loop newMs'' newNat lastYsent
 
 
-        //match outputs |> Array.tryFind (fun (i,_) -> i = 255L) with
-        //| Some (_,xy) ->
-        //    printfn "NAT Received %A" xy
-        //    match haveSameY (Some xy) nat with
-        //    | Some y -> y
-        //    | _ -> loop newMs' (Some xy)
-        //| None -> loop newMs' nat
-
-    loop machines { X = -1L; Y = -1L } 0
+    loop machines { X = -1L; Y = -1L } None
 
 
 let ans2 = solve2 (machines data)
